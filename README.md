@@ -65,7 +65,9 @@ npm run build          # upload the contents of dist/
 
 - **Vercel:** framework *Vite*, build command `npm run build`, output directory `dist`.
 - **Netlify:** build command `npm run build`, publish directory `dist`.
-- **GitHub Pages / S3 / any CDN:** upload `dist/` as is.
+- **GitHub Pages:** `.github/workflows/deploy-pages.yml` builds with `BASE_PATH=/lamma-platform/` and deploys on every push to `main`
+  (repository *Settings → Pages → Source: GitHub Actions*). Live: https://tvabaaly-arch.github.io/lamma-platform/
+- **S3 / any CDN:** upload `dist/` as is.
 
 No environment variables are required.
 
