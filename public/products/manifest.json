@@ -1,0 +1,162 @@
+[
+ {
+  "src": "3fe99eb3-8824-4a50-b4a5-24bfe81c778a.webp",
+  "out": "products/flowers-spring-pastel.webp",
+  "w": 900,
+  "h": 900,
+  "kb": 42
+ },
+ {
+  "src": "6379d402-6538-4cda-892b-c455d9f65b9b.webp",
+  "out": "products/flowers-royal-fuchsia.webp",
+  "w": 1000,
+  "h": 1000,
+  "kb": 45
+ },
+ {
+  "src": "673347d560a4c.webp",
+  "out": "products/choc-mini-pouch.webp",
+  "w": 600,
+  "h": 600,
+  "kb": 5
+ },
+ {
+  "src": "673c3e7bc0370.webp",
+  "out": "products/choc-hospitality-chest.webp",
+  "w": 1200,
+  "h": 1200,
+  "kb": 101
+ },
+ {
+  "src": "673c7ef9ce5d5.webp",
+  "out": "products/choc-coral-box.webp",
+  "w": 600,
+  "h": 600,
+  "kb": 12
+ },
+ {
+  "src": "673c800968c22.webp",
+  "out": "products/choc-teal-box.webp",
+  "w": 600,
+  "h": 600,
+  "kb": 11
+ },
+ {
+  "src": "9955b98b-b37e-4cc5-99b8-71ebae668734.avif",
+  "out": "products/flowers-pink-chrysanthemum-box.webp",
+  "w": 308,
+  "h": 308,
+  "kb": 5
+ },
+ {
+  "src": "Banner.jpg",
+  "out": "hero/banner-2400.webp + hero/banner-1280.webp",
+  "w": 2760,
+  "h": 1200
+ },
+ {
+  "src": "EfEVgSvzoKvv7L8CbeTskhOSeXg9b2NeRZnQ63AL.webp",
+  "out": "products/flowers-peach-roses.webp",
+  "w": 1080,
+  "h": 1080,
+  "kb": 56
+ },
+ {
+  "src": "FoV87eFYz6Tnznmx6JZLKjwYzFJDaokgoiUtVIf1.webp",
+  "out": "products/choc-belgian-assorted.webp",
+  "w": 1200,
+  "h": 800,
+  "kb": 21
+ },
+ {
+  "src": "Screenshot 2026-10-18 at 2.38.07 PM.png",
+  "out": "products/flowers-garden-vase.webp",
+  "w": 1142,
+  "h": 1196,
+  "kb": 91
+ },
+ {
+  "src": "Screenshot 2026-10-18 at 2.38.23 PM.png",
+  "out": "products/flowers-crystal-violet.webp",
+  "w": 1176,
+  "h": 1116,
+  "kb": 89
+ },
+ {
+  "src": "Screenshot 2026-10-18 at 2.39.04 PM.png",
+  "out": "products/cake-chocolate-glaze.webp",
+  "w": 796,
+  "h": 668,
+  "kb": 11
+ },
+ {
+  "src": "Screenshot 2026-10-18 at 2.39.16 PM.png",
+  "out": "products/cake-red-mousse.webp",
+  "w": 838,
+  "h": 772,
+  "kb": 16
+ },
+ {
+  "src": "Screenshot 2026-10-18 at 2.39.37 PM.png",
+  "out": "products/cake-floral-macaron.webp",
+  "w": 860,
+  "h": 841,
+  "kb": 37
+ },
+ {
+  "src": "Screenshot 2026-10-18 at 2.45.31 PM.png",
+  "out": "products/cake-red-velvet-heart.webp",
+  "w": 898,
+  "h": 833,
+  "kb": 26
+ },
+ {
+  "src": "Screenshot 2026-10-18 at 2.46.11 PM.png",
+  "out": "products/balloons-blush-champagne.webp",
+  "w": 784,
+  "h": 962,
+  "kb": 22
+ },
+ {
+  "src": "Screenshot 2026-10-18 at 2.46.33 PM.png",
+  "out": "products/balloons-lilac-confetti.webp",
+  "w": 788,
+  "h": 1008,
+  "kb": 24
+ },
+ {
+  "src": "download (1).jpg",
+  "out": "products/bundle-birthday.webp",
+  "w": 1200,
+  "h": 565,
+  "kb": 36
+ },
+ {
+  "src": "f145133a-3a28-4d41-a81b-569bf6530ca0.avif",
+  "out": "products/flowers-red-roses-box.webp",
+  "w": 308,
+  "h": 308,
+  "kb": 6
+ },
+ {
+  "src": "images (1).jpeg",
+  "out": "products/choc-green-gift-box.webp",
+  "w": 447,
+  "h": 447,
+  "kb": 8
+ },
+ {
+  "src": "images.jpeg",
+  "out": "products/choc-roses-black-box.webp",
+  "w": 447,
+  "h": 447,
+  "kb": 16
+ },
+ {
+  "src": "باقة-ورد-وردية-شاملة-التوصيل.webp",
+  "out": "products/flowers-pink-spray-roses.webp",
+  "w": 1200,
+  "h": 1187,
+  "kb": 101
+ }
+]

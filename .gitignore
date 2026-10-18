@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+dist-single/
+dist-artifact/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# OS / editor / temp
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
+*.tmp
+.cache/

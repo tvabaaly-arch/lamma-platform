@@ -1,0 +1,45 @@
+import type { SVGProps } from 'react'
+/* LAMMA icon set — 1.6px rounded line icons; the 4-point star echoes the logo's centre. */
+type P = SVGProps<SVGSVGElement> & { size?: number }
+const base = (size = 20, rest: P) => ({ width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true, ...rest })
+const mk = (d: React.ReactNode) => ({ size, ...rest }: P) => <svg {...base(size, rest)}>{d}</svg>
+export const I = {
+  search: mk(<><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></>),
+  bag: mk(<><path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z" /><path d="M9 8V6.5a3 3 0 0 1 6 0V8" /></>),
+  heart: mk(<path d="M12 20s-7.5-4.4-7.5-10A4.3 4.3 0 0 1 12 7.6 4.3 4.3 0 0 1 19.5 10C19.5 15.6 12 20 12 20Z" />),
+  user: mk(<><circle cx="12" cy="8.5" r="3.8" /><path d="M4.5 20c1.4-3.6 4.2-5.2 7.5-5.2s6.1 1.6 7.5 5.2" /></>),
+  menu: mk(<><path d="M4 7h16M4 12h10M4 17h16" /></>),
+  close: mk(<path d="M6 6l12 12M18 6 6 18" />),
+  arrow: mk(<path d="M5 12h14m-5-5 5 5-5 5" />),
+  chevron: mk(<path d="m9 6 6 6-6 6" />),
+  chevronDown: mk(<path d="m6 9 6 6 6-6" />),
+  plus: mk(<path d="M12 5v14M5 12h14" />),
+  minus: mk(<path d="M5 12h14" />),
+  trash: mk(<><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3" /></>),
+  swap: mk(<><path d="M7 4 4 7l3 3" /><path d="M4 7h12a4 4 0 0 1 4 4" /><path d="m17 20 3-3-3-3" /><path d="M20 17H8a4 4 0 0 1-4-4" /></>),
+  sparkle: mk(<path d="M12 3c.6 4.2 2 5.6 6.2 6.2-4.2.6-5.6 2-6.2 6.2-.6-4.2-2-5.6-6.2-6.2C10 8.6 11.4 7.2 12 3Zm6 11c.3 1.8.9 2.4 2.7 2.7-1.8.3-2.4.9-2.7 2.7-.3-1.8-.9-2.4-2.7-2.7 1.8-.3 2.4-.9 2.7-2.7Z" />),
+  truck: mk(<><path d="M3 6h11v10H3zM14 9h4l3 3.5V16h-7" /><circle cx="7" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" /></>),
+  gift: mk(<><rect x="3.5" y="8" width="17" height="4" rx="1" /><path d="M5 12v8h14v-8M12 8v12" /><path d="M12 8C10 4 6.5 4.5 7.5 7c.4 1 2.5 1 4.5 1Zm0 0c2-4 5.5-3.5 4.5-1-.4 1-2.5 1-4.5 1Z" /></>),
+  calendar: mk(<><rect x="3.5" y="5" width="17" height="15" rx="2.5" /><path d="M3.5 10h17M8 3v4M16 3v4" /></>),
+  pin: mk(<><path d="M12 21s-6.5-6-6.5-11a6.5 6.5 0 0 1 13 0c0 5-6.5 11-6.5 11Z" /><circle cx="12" cy="10" r="2.3" /></>),
+  check: mk(<path d="m5 12.5 4.2 4.2L19 7" />),
+  filter: mk(<><path d="M4 6h16M7 12h10M10 18h4" /></>),
+  globe: mk(<><circle cx="12" cy="12" r="8.5" /><path d="M3.5 12h17M12 3.5c2.5 2.6 3.5 5.4 3.5 8.5s-1 5.9-3.5 8.5c-2.5-2.6-3.5-5.4-3.5-8.5s1-5.9 3.5-8.5Z" /></>),
+  store: mk(<><path d="M4 9.5 5.5 4h13L20 9.5" /><path d="M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0" /><path d="M5.5 12v8h13v-8M10 20v-4.5h4V20" /></>),
+  chart: mk(<><path d="M4 20V4M4 20h16" /><path d="m7 15 4-4 3 3 5-6" /></>),
+  box: mk(<><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9Z" /><path d="m4 7.5 8 4.5 8-4.5M12 12v9" /></>),
+  clock: mk(<><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></>),
+  card: mk(<><rect x="3" y="5.5" width="18" height="13" rx="2.5" /><path d="M3 10h18M7 15h3" /></>),
+  eye: mk(<><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" /><circle cx="12" cy="12" r="2.8" /></>),
+  refresh: mk(<><path d="M20 11a8 8 0 0 0-14.7-3.5M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14.7 3.5M20 20v-4h-4" /></>),
+  copy: mk(<><rect x="8" y="8" width="12" height="12" rx="2.5" /><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" /></>),
+  star: mk(<path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6Z" />),
+  home: mk(<><path d="M4 10.5 12 4l8 6.5V20h-5.5v-5.5h-5V20H4Z" /></>),
+  grid: mk(<><rect x="4" y="4" width="7" height="7" rx="2" /><rect x="13" y="4" width="7" height="7" rx="2" /><rect x="4" y="13" width="7" height="7" rx="2" /><rect x="13" y="13" width="7" height="7" rx="2" /></>),
+  logout: mk(<><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10" /></>),
+  edit: mk(<><path d="M4 20h4L19 9l-4-4L4 16Z" /><path d="m13.5 6.5 4 4" /></>),
+  lock: mk(<><rect x="5" y="10.5" width="14" height="10" rx="2.5" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" /></>),
+  wand: mk(<><path d="m4 20 11-11M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1Zm5 7 .7 1.3L21 13l-1.3.7L19 15l-.7-1.3L17 13l1.3-.7Z" /></>),
+  play: mk(<path d="M8 5.5v13l10-6.5Z" />),
+}
+export type IconName = keyof typeof I
