@@ -1,0 +1,45 @@
+name: API tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: lamma
+          POSTGRES_PASSWORD: lamma
+          POSTGRES_DB: lamma_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U lamma" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://lamma:lamma@localhost:5432/lamma_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - name: Web app — install and type-check
+        run: npm ci && npx tsc --noEmit
+      - name: Web app — build in API mode
+        run: npx vite build --mode api --outDir /tmp/web-api
+      - name: API — install
+        working-directory: server
+        run: npm ci
+      - name: API — type-check and bundle
+        working-directory: server
+        run: npm run build
+      - name: API — tests
+        working-directory: server
+        run: npm test

@@ -10,6 +10,8 @@ dist-artifact/
 .env
 .env.*
 !.env.example
+# .env.api only points the web app at a local API (no secrets)
+!.env.api
 *.pem
 *.key
 
@@ -21,3 +23,7 @@ Thumbs.db
 .idea/
 *.tmp
 .cache/
+
+# API server runtime files
+server/uploads/
+server/.test-uploads/

@@ -4,39 +4,11 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import { PRODUCTS, productById, merchantById, type CityId, type OccasionId, type RecipientId, type Product, type AgeGroup, type Interest, type Relationship } from '../data/catalog'
 
 export type Lang = 'ar' | 'en'
-export type StatusId = 'placed' | 'accepted' | 'preparing' | 'ready' | 'out' | 'delivered'
-export const STATUS_FLOW: StatusId[] = ['placed', 'accepted', 'preparing', 'ready', 'out', 'delivered']
+export * from './model'
+import { STATUS_FLOW, unitPrice, type StatusId, type CartLine, type OrderLine, type Order, type Brief, type Override } from './model'
+import { api, apiMode, type Role } from './api'
 
-export type CartLine = {
-  key: string
-  productId: string
-  variant: Record<string, string>
-  qty: number
-  note?: string
-  bundle?: string
-}
-
-export type OrderLine = CartLine & { unit: number; merchant: string }
-
-export type Order = {
-  id: string
-  createdAt: number
-  lines: OrderLine[]
-  recipient: { name: string; phone: string; city: CityId; district: string; address: string }
-  sender: { name: string }
-  delivery: { date: string; slot: string }
-  card: { design: number; message: string; from: string; hidePrice: boolean }
-  surprise: boolean
-  payment: string
-  totals: { subtotal: number; delivery: number; discount: number; total: number }
-  sub: Record<string, { status: StatusId; history: { status: StatusId; at: number }[] }>
-  occasion?: OccasionId
-  revealed?: boolean
-}
-
-export type Brief = { text: string; occasion: OccasionId; recipient: RecipientId; budget: number; city: CityId; date?: string; style?: string; age?: AgeGroup; interests?: Interest[]; relationship?: Relationship }
-
-type Override = { stock?: number; price?: number; active?: boolean }
+export type NewOrder = Omit<Order, 'id' | 'createdAt' | 'sub' | 'lines'> & { lines: CartLine[]; promoCode?: string }
 
 type State = {
   lang: Lang
@@ -44,7 +16,7 @@ type State = {
   cart: CartLine[]
   cartOpen: boolean
   favorites: string[]
-  user: { name: string; phone: string; email?: string } | null
+  user: { name: string; phone: string; email?: string; role?: Role; merchantId?: string | null } | null
   orders: Order[]
   overrides: Record<string, Override>
   merchantSession: string
@@ -64,7 +36,9 @@ type State = {
   toggleFav: (id: string) => void
   login: (u: State['user']) => void
   logout: () => void
-  placeOrder: (o: Omit<Order, 'id' | 'createdAt' | 'sub' | 'lines'> & { lines: CartLine[] }) => Order
+  placeOrder: (o: NewOrder) => Order
+  /** Demo: places the order locally. API mode: creates it on the server and confirms the (demo) payment. */
+  placeOrderAsync: (o: NewOrder) => Promise<Order>
   advance: (orderId: string, merchantId: string, to?: StatusId) => void
   markRevealed: (orderId: string) => void
   setOverride: (pid: string, o: Override) => void
@@ -126,7 +100,7 @@ const initial = {
   cartOpen: false,
   favorites: ['ph04', 'ph21', 'p041'] as string[],
   user: null,
-  orders: seedOrders(),
+  orders: apiMode ? [] : seedOrders(),
   overrides: {} as Record<string, Override>,
   merchantSession: 'reem',
   merchantStatus: { reem: 'active', sukkar: 'active', najd: 'active', farha: 'active', sahra: 'active', oudbox: 'active', haladar: 'active', naqsh: 'active', batla: 'active', qamariya: 'pending' } as State['merchantStatus'],
@@ -183,11 +157,27 @@ export const useStore = create<State>()(
         set({ orders: [order, ...get().orders], cart: [], overrides })
         return order
       },
+      placeOrderAsync: async (o) => {
+        if (!apiMode) {
+          await new Promise((r) => setTimeout(r, 1600))
+          return get().placeOrder(o)
+        }
+        const { order, payment } = await api.orders.create({
+          lines: o.lines.map(({ productId, variant, qty, note, bundle }) => ({ productId, variant, qty, ...(note ? { note } : {}), ...(bundle ? { bundle } : {}) })),
+          recipient: o.recipient, sender: o.sender, delivery: o.delivery, card: o.card, surprise: o.surprise,
+          ...(o.occasion ? { occasion: o.occasion } : {}), ...(o.promoCode ? { promoCode: o.promoCode } : {}), payment: o.payment,
+        })
+        if (payment.kind === 'redirect' && payment.url) { window.location.href = payment.url; return order }
+        const paid = (await api.orders.pay(order.id)).order
+        set({ orders: [paid, ...get().orders.filter((x) => x.id !== paid.id)], cart: [] })
+        return paid
+      },
       advance: (orderId, merchantId, to) =>
         set({
           orders: get().orders.map((o) => {
             if (o.id !== orderId || !o.sub[merchantId]) return o
             const cur = o.sub[merchantId]
+            if (cur.status === 'rejected' || cur.status === 'cancelled') return o
             const next = to ?? STATUS_FLOW[Math.min(STATUS_FLOW.length - 1, STATUS_FLOW.indexOf(cur.status) + 1)]
             if (next === cur.status) return o
             return { ...o, sub: { ...o.sub, [merchantId]: { status: next, history: [...cur.history, { status: next, at: Date.now() }] } } }
@@ -200,15 +190,19 @@ export const useStore = create<State>()(
       setBrief: (brief) => set({ studio: { brief, bundlesGenerated: get().studio.bundlesGenerated + 1 } }),
       showToast: (text) => set({ toast: { id: Date.now(), text } }),
       setIntroSeen: () => set({ introSeen: true }),
-      resetDemo: () => set({ ...initial, orders: seedOrders(), lang: get().lang, introSeen: true }),
+      resetDemo: () => set({ ...initial, orders: apiMode ? [] : seedOrders(), lang: get().lang, introSeen: true }),
     }),
     {
-      name: 'lamma-demo-v3',
+      // The live-API build keeps its state apart from the offline demo's.
+      name: apiMode ? 'lamma-api-v1' : 'lamma-demo-v3',
       storage: safeStorage,
-      partialize: (s) => ({
-        lang: s.lang, city: s.city, cart: s.cart, favorites: s.favorites, user: s.user, orders: s.orders,
-        overrides: s.overrides, merchantSession: s.merchantSession, merchantStatus: s.merchantStatus, studio: s.studio, introSeen: s.introSeen,
-      }),
+      partialize: (s) => apiMode
+        // Orders, stock and the signed-in user come from the server; only UI preferences and the cart stay local.
+        ? { lang: s.lang, city: s.city, cart: s.cart, merchantSession: s.merchantSession, studio: s.studio, introSeen: s.introSeen }
+        : {
+          lang: s.lang, city: s.city, cart: s.cart, favorites: s.favorites, user: s.user, orders: s.orders,
+          overrides: s.overrides, merchantSession: s.merchantSession, merchantStatus: s.merchantStatus, studio: s.studio, introSeen: s.introSeen,
+        },
     },
   ),
 )
@@ -216,49 +210,8 @@ export const useStore = create<State>()(
 // Keep tabs in sync: a merchant updating an order in one tab updates customer tracking in another.
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    if (e.key === 'lamma-demo-v3') useStore.persist.rehydrate()
+    if (e.key === (apiMode ? 'lamma-api-v1' : 'lamma-demo-v3')) useStore.persist.rehydrate()
   })
-}
-
-/* ---------- pricing helpers ---------- */
-export function variantDelta(p: Product, variant: Record<string, string>) {
-  return p.variants.reduce((sum, g) => sum + (g.options.find((o) => o.id === variant[g.key])?.delta ?? 0), 0)
-}
-export function basePrice(p: Product, overrides: Record<string, Override>) {
-  return overrides[p.id]?.price ?? p.price
-}
-export function unitPrice(p: Product, variant: Record<string, string>, overrides: Record<string, Override>) {
-  return basePrice(p, overrides) + variantDelta(p, variant)
-}
-export function stockOf(p: Product, overrides: Record<string, Override>) {
-  return overrides[p.id]?.stock ?? p.stock
-}
-export function isAvailable(p: Product, overrides: Record<string, Override>) {
-  return overrides[p.id]?.active !== false && stockOf(p, overrides) > 0
-}
-export function defaultVariant(p: Product) {
-  const v: Record<string, string> = {}
-  p.variants.forEach((g) => (v[g.key] = g.options[0].id))
-  return v
-}
-export const DELIVERY_PER_MERCHANT = 20
-
-export function cartTotals(cart: CartLine[], overrides: Record<string, Override>) {
-  let subtotal = 0
-  const merchants = new Set<string>()
-  cart.forEach((l) => {
-    const p = productById(l.productId)
-    if (!p) return
-    subtotal += unitPrice(p, l.variant, overrides) * l.qty
-    merchants.add(p.merchant)
-  })
-  const delivery = merchants.size * DELIVERY_PER_MERCHANT
-  return { subtotal, delivery, merchants: [...merchants], total: subtotal + delivery }
-}
-
-export function orderStatus(o: Order): StatusId {
-  const idx = Math.min(...Object.values(o.sub).map((s) => STATUS_FLOW.indexOf(s.status)))
-  return STATUS_FLOW[idx]
 }
 
 export const merchantName = (id: string) => merchantById(id)?.name

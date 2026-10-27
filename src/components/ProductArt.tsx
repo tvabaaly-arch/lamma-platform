@@ -544,8 +544,8 @@ function Photo({ art, view, className, label, sizes, eager }: { art: Art; view: 
   return (
     <div className={`relative overflow-hidden ${packshot || view === 2 ? 'bg-[#F4EDE6]' : 'bg-cream'} ${className}`}>
       <img
-        src={`products/${art.img}.webp`}
-        srcSet={`products/${art.img}-sm.webp 600w, products/${art.img}.webp 1200w`}
+        src={art.url ?? `products/${art.img}.webp`}
+        srcSet={art.url ? undefined : `products/${art.img}-sm.webp 600w, products/${art.img}.webp 1200w`}
         sizes={sizes ?? '(max-width: 768px) 50vw, 25vw'}
         alt={label ?? ''}
         loading={eager ? 'eager' : 'lazy'}
@@ -560,7 +560,7 @@ function Photo({ art, view, className, label, sizes, eager }: { art: Art; view: 
 }
 
 export const ProductArt = memo(function ProductArt({ art, view = 0, className = '', label, sizes, eager }: { art: Art; view?: number; className?: string; label?: string; sizes?: string; eager?: boolean }) {
-  if (art.img) return <Photo art={art} view={view} className={className} label={label} sizes={sizes} eager={eager} />
+  if (art.img || art.url) return <Photo art={art} view={view} className={className} label={label} sizes={sizes} eager={eager} />
   return <Illustration art={art} view={view} className={className} label={label} />
 })
 

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { productById } from '../data/catalog'
 import { useI18n } from '../lib/i18n'
 import { useStore, orderStatus } from '../lib/store'
@@ -11,16 +11,28 @@ import { Logo } from '../components/Logo'
 import { I } from '../components/Icons'
 import { Button, PatternBg } from '../components/ui'
 import { STATUS_LABEL } from './Order'
+import { api, apiMode } from '../lib/api'
+import type { Order } from '../lib/model'
 
 export default function Surprise() {
   const { id } = useParams()
   const { tx, l, date, lang } = useI18n()
-  const order = useStore((s) => s.orders.find((o) => o.id === id))
+  const [params] = useSearchParams()
+  const token = params.get('t')
+  const own = useStore((s) => s.orders.find((o) => o.id === id))
   const { markRevealed, setLang, showToast } = useStore()
   const [stage, setStage] = useState<0 | 1 | 2>(0)
   const [thanks, setThanks] = useState('')
   const [sent, setSent] = useState(false)
+  // Recipients open the link without an account: load the order with its secret token.
+  const [shared, setShared] = useState<Order | null | undefined>(apiMode && !own && token ? undefined : null)
+  useEffect(() => {
+    if (!apiMode || own || !token || !id) return
+    api.orders.surprise(id, token).then((r) => setShared(r.order)).catch(() => setShared(null))
+  }, [id, token, own])
+  const order = own ?? shared ?? undefined
 
+  if (shared === undefined) return <div className="grid min-h-screen place-items-center bg-green"><Logo className="h-12 opacity-80" /></div>
   if (!order)
     return (
       <div className="grid min-h-screen place-items-center bg-cream-50 p-6 text-center">
@@ -28,7 +40,12 @@ export default function Surprise() {
       </div>
     )
 
-  const open = () => { setStage(1); markRevealed(order.id); setTimeout(() => setStage(2), 1600) }
+  const open = () => {
+    setStage(1)
+    if (own) markRevealed(order.id)
+    else if (token) api.orders.reveal(order.id, token).catch(() => {})
+    setTimeout(() => setStage(2), 1600)
+  }
   const status = orderStatus(order)
 
   return (

@@ -8,6 +8,21 @@ customisation → cart → checkout → merchant fulfilment → live tracking �
 > payments, no card data is collected, and no external AI service is called — suggestions come from a
 > transparent rule-based engine running on the demo catalogue.
 
+The repository has two parts:
+
+| Part | Folder | What it is |
+| --- | --- | --- |
+| Web app | `src/`, `public/` | React storefront, Gift Finder and Studio, checkout, tracking, merchant and admin dashboards |
+| API | `server/` | Node + PostgreSQL backend: catalogue, phone sign-in, orders split per store, merchant and admin APIs, live updates, gift engine. See [server/README.md](server/README.md) and [docs/API.md](docs/API.md) |
+
+The web app runs in one of two modes:
+
+- **Offline demo** (default, the GitHub Pages build): everything runs in the browser with demo data.
+- **Live API** (`npm run dev:api` / `npm run build:api`, or any build with `VITE_API_URL` set):
+  - The catalogue, accounts, orders, stock and dashboards come from the API.
+  - A merchant's status update reaches the customer's tracking page live.
+  - Customers, merchants and admins sign in with their own phone numbers.
+
 ## Features
 
 | Area | What it does |
@@ -46,7 +61,9 @@ npm run dev            # http://localhost:5173
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Development server with HMR |
+| `npm run dev` | Development server with HMR (offline demo) |
+| `npm run dev:api` | Development server connected to a local API (`.env.api` → `http://localhost:8787`) |
+| `npm run build:api` | Production build connected to the API in `.env.api` / `VITE_API_URL` |
 | `npm run build` | Type-check (`tsc`) + optimised production build → `dist/` |
 | `npm run preview` | Serve the production build locally |
 | `npm run build:single` | Single self-contained HTML (JS/CSS inlined) → `dist-single/` (images stay as files next to it) |
@@ -74,6 +91,8 @@ No environment variables are required.
 ## Project structure
 
 ```
+server/                 LAMMA API (see server/README.md)
+docs/API.md             API reference for web and mobile clients
 public/
   hero/                 Homepage banner (2400w + 1280w WebP)
   products/             Product photography (full + -sm WebP) and manifest.json for the supplied originals
@@ -84,12 +103,15 @@ src/
                         Layout (header, cart drawer, search, footer), ProductCard, Charts, GreetingCard, ui kit
   data/catalog.ts       Categories, merchants, products, occasions, recipients, collections (demo data)
   lib/ai.ts             Rule-based brief parser and bundle engine (age, interests, relationship, budget)
+  lib/model.ts          Shared order types and pricing rules (used by the web app and the API)
   lib/store.ts          Zustand store: cart, orders, statuses, inventory, favourites
+  lib/api.ts, sync.ts   API client and live-API mode (catalogue bootstrap, sessions, live updates)
   pages/                Home, Shop, Occasions, Product, Merchants, Finder, Studio, Checkout,
                         Order/Track, Surprise, Account, MerchantDash, AdminDash
 scripts/
   build-artifact.py     Converts the single-file build for embedded previews
   engine-check.ts       Gift-engine scenario checks
+  smoke-live.mjs        Post-deploy browser check of the live site (desktop + mobile)
 ```
 
 ## Brand

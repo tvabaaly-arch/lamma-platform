@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "dev:api": "vite --mode api",
     "build": "tsc --noEmit && vite build",
+    "build:api": "tsc --noEmit && vite build --mode api",
     "build:single": "vite build --mode single",
     "preview": "vite preview --host",
     "check:engine": "tsx scripts/engine-check.ts",

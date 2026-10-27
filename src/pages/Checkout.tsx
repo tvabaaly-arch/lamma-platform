@@ -12,12 +12,10 @@ import { LogoMark } from '../components/Logo'
 import { I } from '../components/Icons'
 import { variantText } from '../components/Layout'
 import { Button, cx, Empty } from '../components/ui'
+import { SLOTS, DEMO_PROMOS } from '../lib/model'
+import { api, apiMode, ApiError } from '../lib/api'
+import { Login } from './Account'
 
-const SLOTS = [
-  { id: '10:00–14:00', start: 10, ar: 'صباحاً ١٠–٢', en: 'Morning 10–2' },
-  { id: '14:00–18:00', start: 14, ar: 'عصراً ٢–٦', en: 'Afternoon 2–6' },
-  { id: '18:00–22:00', start: 18, ar: 'مساءً ٦–١٠', en: 'Evening 6–10' },
-]
 
 function Field({ id, label, error, children }: { id: string; label: string; error?: string; children: React.ReactNode }) {
   return (
@@ -33,7 +31,7 @@ const inputCls = (err?: boolean) => cx('h-12 w-full rounded-2xl border bg-white 
 export default function Checkout() {
   const { tx, l, money, date, lang } = useI18n()
   const nav = useNavigate()
-  const { cart, overrides, city: storeCity, user, placeOrder, studio } = useStore()
+  const { cart, overrides, city: storeCity, user, placeOrderAsync, studio } = useStore()
   const [step, setStep] = useState(0)
   const [r, setR] = useState({ name: '', phone: '', city: storeCity as CityId, district: '', address: '' })
   const [sender, setSender] = useState(user?.name ?? '')
@@ -48,16 +46,32 @@ export default function Checkout() {
   const [surprise, setSurprise] = useState(true)
   const [pay, setPay] = useState('mada')
   const [promo, setPromo] = useState('')
-  const [promoOn, setPromoOn] = useState(false)
+  const [promoOn, setPromoOn] = useState<{ code: string; pct: number } | null>(null)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [processing, setProcessing] = useState(false)
 
   const t = cartTotals(cart, overrides)
-  const discount = promoOn ? Math.round(t.subtotal * 0.1) : 0
+  const discount = promoOn ? Math.round(t.subtotal * promoOn.pct) : 0
+  const applyPromo = async () => {
+    const code = promo.trim().toUpperCase()
+    if (!code) return
+    if (!apiMode) {
+      if (DEMO_PROMOS[code]) { setPromoOn({ code, pct: DEMO_PROMOS[code] }); setErrors({}) } else setErrors({ promo: tx('الكود غير صحيح', 'Invalid code') })
+      return
+    }
+    try {
+      const r = await api.promo(code, cart.map(({ key: _k, ...ln }) => ln))
+      if (r.valid && r.promo) { setPromoOn({ code: r.promo.code, pct: r.promo.percent / 100 }); setErrors({}) }
+      else { setPromoOn(null); setErrors({ promo: r.problem ? (lang === 'ar' ? r.problem.messageAr : r.problem.message) : tx('الكود غير صحيح', 'Invalid code') }) }
+    } catch (e) { setErrors({ promo: e instanceof ApiError ? e.text(lang) : tx('تعذر التحقق من الكود', 'Could not check the code') }) }
+  }
   const undeliverable = cart.filter((c) => !productCities(productById(c.productId)!).includes(r.city))
 
   if (cart.length === 0 && !processing)
     return <div className="py-16"><Empty title={tx('سلتك فاضية', 'Your cart is empty')} sub={tx('أضف منتجات أو خلّ الاستوديو يجهز لك لمّة.', 'Add products or let the Studio build a bundle.')} action={<div className="flex gap-2"><Button variant="outline" to="/shop">{tx('تسوّق', 'Shop')}</Button><Button to="/studio"><I.sparkle size={16} />{tx('الاستوديو', 'Studio')}</Button></div>} /></div>
+
+  // With the live API, orders belong to an account.
+  if (apiMode && !user) return <Login title={tx('سجّل دخولك لإتمام الطلب', 'Sign in to place your order')} />
 
   function validate0() {
     const e: Record<string, string> = {}
@@ -76,10 +90,11 @@ export default function Checkout() {
     setStep((s) => s + 1)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
-  function submit() {
+  async function submit() {
     setProcessing(true)
-    setTimeout(() => {
-      const o = placeOrder({
+    setErrors({})
+    try {
+      const o = await placeOrderAsync({
         lines: cart,
         recipient: { ...r, phone: r.phone.replace(/\s/g, '') },
         sender: { name: sender },
@@ -87,9 +102,18 @@ export default function Checkout() {
         card: { ...card, from: card.from || sender },
         surprise, payment: pay, occasion: occ,
         totals: { subtotal: t.subtotal, delivery: t.delivery, discount, total: t.subtotal + t.delivery - discount },
+        ...(promoOn ? { promoCode: promoOn.code } : {}),
       })
       nav(`/order/${o.id}`, { state: { fresh: true } })
-    }, 1600)
+    } catch (e) {
+      setProcessing(false)
+      let msg = tx('تعذر إتمام الطلب، حاول مرة أخرى', 'Could not place the order, please try again')
+      if (e instanceof ApiError) {
+        const first = Array.isArray(e.details) ? (e.details[0] as { message?: string; messageAr?: string } | undefined) : undefined
+        msg = first?.message ? (lang === 'ar' ? first.messageAr ?? first.message : first.message) : e.text(lang)
+      }
+      setErrors({ submit: msg })
+    }
   }
 
   const steps = [tx('التوصيل', 'Delivery'), tx('الكرت والمفاجأة', 'Card & surprise'), tx('الدفع', 'Payment')]
@@ -223,10 +247,10 @@ export default function Checkout() {
                   <div className="mt-6 flex gap-2">
                     <label htmlFor="promo" className="sr-only">{tx('كود الخصم', 'Promo code')}</label>
                     <input id="promo" value={promo} onChange={(e) => setPromo(e.target.value.toUpperCase())} placeholder={tx('كود الخصم (جرّب LAMMA10)', 'Promo code (try LAMMA10)')} className={inputCls()} dir="ltr" />
-                    <Button variant="outline" onClick={() => { if (promo === 'LAMMA10') { setPromoOn(true); setErrors({}) } else setErrors({ promo: tx('الكود غير صحيح', 'Invalid code') }) }}>{tx('تطبيق', 'Apply')}</Button>
+                    <Button variant="outline" onClick={() => void applyPromo()}>{tx('تطبيق', 'Apply')}</Button>
                   </div>
                   {errors.promo && <p className="mt-1 text-xs text-blush-700">{errors.promo}</p>}
-                  {promoOn && <p className="mt-2 flex items-center gap-1 text-sm text-green"><I.check size={15} className="text-gold-700" />{tx('خصم ١٠٪ مفعّل', '10% off applied')}</p>}
+                  {promoOn && <p className="mt-2 flex items-center gap-1 text-sm text-green"><I.check size={15} className="text-gold-700" />{tx(`خصم ${String(Math.round(promoOn.pct * 100)).replace(/\d/g, (d) => '٠١٢٣٤٥٦٧٨٩'[+d])}٪ مفعّل`, `${Math.round(promoOn.pct * 100)}% off applied`)}</p>}
                 </div>
                 <div className="rounded-[30px] bg-cream p-5 text-sm text-ink/70 md:p-7">
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -237,6 +261,7 @@ export default function Checkout() {
               </motion.section>
             )}
           </AnimatePresence>
+          {errors.submit && <p className="mt-4 rounded-2xl bg-blush-100 px-4 py-3 text-sm text-blush-700" role="alert">{errors.submit}</p>}
           <div className="mt-6 flex items-center justify-between">
             {step > 0 ? <Button variant="ghost" onClick={() => setStep(step - 1)}><I.arrow size={16} className="rtl-flip" />{tx('رجوع', 'Back')}</Button> : <span />}
             {step < 2 ? <Button size="lg" onClick={next}>{tx('التالي', 'Continue')}<I.arrow size={16} className="rtl-flip rotate-180" /></Button>

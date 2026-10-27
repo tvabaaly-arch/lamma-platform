@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { CATEGORIES, CITIES, MERCHANTS, PRODUCTS, OCCASIONS, merchantById, productById, type Product } from '../data/catalog'
 import { useI18n } from '../lib/i18n'
 import { useStore, cartTotals, unitPrice, basePrice } from '../lib/store'
+import { apiMode } from '../lib/api'
 import { Logo, LogoMark } from './Logo'
 import { I } from './Icons'
 import { ProductArt } from './ProductArt'
@@ -30,7 +31,7 @@ export function DemoBar() {
             <button className="opacity-70 hover:opacity-100" onClick={() => setConfirm(false)}>{tx('إلغاء', 'Cancel')}</button>
           </span>
         ) : (
-          <button className="hidden shrink-0 text-gold underline-offset-2 hover:underline sm:inline" onClick={() => setConfirm(true)}>{tx('إعادة ضبط', 'Reset demo')}</button>
+          !apiMode && <button className="hidden shrink-0 text-gold underline-offset-2 hover:underline sm:inline" onClick={() => setConfirm(true)}>{tx('إعادة ضبط', 'Reset demo')}</button>
         )}
       </div>
     </div>

@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { CITIES, merchantById, productById } from '../data/catalog'
 import { useI18n } from '../lib/i18n'
-import { useStore, orderStatus, STATUS_FLOW, type StatusId, type Order } from '../lib/store'
+import { useStore, orderStatus, STATUS_FLOW, type StatusId, type SubStatus, type Order } from '../lib/store'
 import { ProductArt } from '../components/ProductArt'
 import { GreetingCard } from '../components/GreetingCard'
 import { Confetti } from '../components/Confetti'
@@ -11,8 +11,12 @@ import { LogoMark } from '../components/Logo'
 import { I } from '../components/Icons'
 import { variantText } from '../components/Layout'
 import { Button, cx, Empty, PatternBg } from '../components/ui'
+import { apiMode } from '../lib/api'
+import { useLiveOrder } from '../lib/sync'
 
-export const STATUS_LABEL: Record<StatusId, { ar: string; en: string; d: { ar: string; en: string } }> = {
+export const STATUS_LABEL: Record<SubStatus, { ar: string; en: string; d: { ar: string; en: string } }> = {
+  rejected: { ar: 'اعتذر المتجر', en: 'Declined by store', d: { ar: 'سيُعاد مبلغ هذا الجزء', en: 'This part will be refunded' } },
+  cancelled: { ar: 'ملغي', en: 'Cancelled', d: { ar: 'تم إلغاء الطلب', en: 'The order was cancelled' } },
   placed: { ar: 'تم استلام الطلب', en: 'Order placed', d: { ar: 'وصل طلبك للمتجر', en: 'Your order reached the merchant' } },
   accepted: { ar: 'قبِل المتجر الطلب', en: 'Accepted', d: { ar: 'المتجر أكد الطلب', en: 'The merchant confirmed it' } },
   preparing: { ar: 'قيد التجهيز', en: 'Preparing', d: { ar: 'نجهز الفرحة بعناية', en: 'Crafting it with care' } },
@@ -47,12 +51,16 @@ export function OrderPage() {
   const setMerchant = useStore((s) => s.setMerchantSession)
   const toast = useStore((s) => s.showToast)
   const [copied, setCopied] = useState(false)
+  const role = useStore((s) => s.user?.role)
+  useLiveOrder(order)
   if (!order) return <div className="py-16"><Empty title={tx('ما لقينا الطلب', 'Order not found')} sub={tx('تأكد من رقم الطلب.', 'Check the order number.')} action={<Button to="/track">{tx('تتبع طلب', 'Track an order')}</Button>} /></div>
 
   const status = orderStatus(order)
-  const idx = STATUS_FLOW.indexOf(status)
+  const idx = STATUS_FLOW.indexOf(status as StatusId)
   const fresh = loc.state?.fresh
-  const surpriseHash = `#/surprise/${order.id}`
+  // With the live API the shareable link carries the order's secret token.
+  const surprisePath = `/surprise/${order.id}${order.publicToken ? `?t=${order.publicToken}` : ''}`
+  const surpriseHash = `#${surprisePath}`
   const copy = async () => {
     const url = `${location.origin}${location.pathname}${surpriseHash}`
     try { await navigator.clipboard.writeText(url); setCopied(true); toast(tx('نُسخ الرابط', 'Link copied')) } catch { setCopied(true) }
@@ -108,7 +116,7 @@ export function OrderPage() {
                   <div className="flex items-center gap-2"><I.store size={18} className="text-gold-700" /><span className="font-medium text-green">{l(merchantById(mid).name)}</span></div>
                   <div className="flex items-center gap-3">
                     <span className="rounded-full bg-white px-3 py-1 text-[13px] text-green">{l(STATUS_LABEL[s.status])}</span>
-                    <button onClick={() => { setMerchant(mid); nav('/dashboard/merchant') }} className="text-[12px] text-cocoa underline-offset-2 hover:underline">{tx('افتح لوحة التاجر', 'Open merchant hub')}</button>
+                    {(!apiMode || role === 'admin') && <button onClick={() => { setMerchant(mid); nav('/dashboard/merchant') }} className="text-[12px] text-cocoa underline-offset-2 hover:underline">{tx('افتح لوحة التاجر', 'Open merchant hub')}</button>}
                   </div>
                 </li>
               ))}
@@ -123,7 +131,7 @@ export function OrderPage() {
                 <div className="flex items-center gap-2 text-gold"><I.sparkle />{tx('المفاجأة الرقمية جاهزة', 'Digital surprise ready')}</div>
                 <p className="mt-2 text-sm text-cream/75">{tx('أرسل الرابط للمستلم ليفتح الكرت والهدية بحركة كشف — أو جرّبها بنفسك.', 'Send this link to the recipient to unwrap the card and gift — or preview it yourself.')}</p>
                 <div className="mt-4 flex items-center gap-2 rounded-2xl bg-cream-50/10 p-2 ps-4 text-sm"><span className="flex-1 truncate font-mono text-cream/80" dir="ltr">…{surpriseHash}</span><button onClick={copy} className="flex items-center gap-1 rounded-xl bg-cream-50/15 px-3 py-2 hover:bg-cream-50/25">{copied ? <I.check size={15} /> : <I.copy size={15} />}{copied ? tx('تم', 'Copied') : tx('نسخ', 'Copy')}</button></div>
-                <Button variant="gold" className="mt-4 w-full" to={`/surprise/${order.id}`}><I.gift size={18} />{tx('معاينة المفاجأة', 'Preview the surprise')}</Button>
+                <Button variant="gold" className="mt-4 w-full" to={surprisePath}><I.gift size={18} />{tx('معاينة المفاجأة', 'Preview the surprise')}</Button>
               </div>
             </div>
           )}

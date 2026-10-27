@@ -17,8 +17,8 @@ export type ArtKind =
   | 'bouquet' | 'rosebox' | 'vase' | 'cake' | 'drip' | 'cupcakes' | 'pralines' | 'bar' | 'dates'
   | 'cluster' | 'number' | 'heart' | 'arch' | 'lantern' | 'table' | 'giftbox' | 'perfume' | 'candle'
   | 'macarons' | 'kunafa' | 'cookies' | 'mug' | 'frame' | 'engraved'
-/** img: photo basename in /products (rendered instead of the illustration). fit 'contain' = white-background packshot. */
-export type Art = { k: ArtKind; c: number; n?: string; img?: string; fit?: 'contain'; pos?: string }
+/** img: photo basename in /products (rendered instead of the illustration). url: absolute photo URL (merchant uploads). fit 'contain' = white-background packshot. */
+export type Art = { k: ArtKind; c: number; n?: string; img?: string; url?: string; fit?: 'contain'; pos?: string }
 
 export type VariantOption = { id: string; label: L; delta: number }
 export type VariantGroup = { key: string; label: L; options: VariantOption[] }
@@ -868,7 +868,9 @@ export const CATALOG: Product[] = [...PHOTO_PRODUCTS, ...ILLUSTRATED]
 export const PRODUCTS: Product[] = CATALOG.filter((x) => !x.hidden)
 
 export const productById = (id: string) => CATALOG.find((x) => x.id === id)
-export const merchantById = (id: string) => MERCHANTS.find((x) => x.id === id)!
+/** Stores that are not live (pending / suspended) — used for order history and the admin console only. */
+export const MERCHANT_ARCHIVE: Merchant[] = []
+export const merchantById = (id: string) => (MERCHANTS.find((x) => x.id === id) ?? MERCHANT_ARCHIVE.find((x) => x.id === id))!
 export const productCities = (prod: Product): CityId[] => merchantById(prod.merchant).cities
 export const sameDay = (prod: Product) => prod.leadHours <= 4
 

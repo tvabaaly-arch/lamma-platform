@@ -1,55 +1,73 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { CATEGORIES, CITIES, MERCHANTS, PRODUCTS, merchantById, productById } from '../data/catalog'
+import { CATALOG, CATEGORIES, CITIES, MERCHANTS, MERCHANT_ARCHIVE, PRODUCTS, merchantById, productById } from '../data/catalog'
 import { useI18n } from '../lib/i18n'
-import { useStore, STATUS_FLOW, basePrice, stockOf, type StatusId } from '../lib/store'
+import { useStore, STATUS_FLOW, basePrice, stockOf, isClosed, type StatusId, type SubStatus } from '../lib/store'
 import { ProductArt } from '../components/ProductArt'
 import { MerchantMonogram, variantText } from '../components/Layout'
 import { AreaChart, BarList, Kpi } from '../components/Charts'
 import { I } from '../components/Icons'
 import { Button, cx, DemoTag } from '../components/ui'
 import { STATUS_LABEL } from './Order'
+import { apiMode } from '../lib/api'
+import { Login } from './Account'
 
-const NEXT_ACTION: Partial<Record<StatusId, { ar: string; en: string }>> = {
+const NEXT_ACTION: Partial<Record<SubStatus, { ar: string; en: string }>> = {
   placed: { ar: 'قبول الطلب', en: 'Accept order' },
   accepted: { ar: 'بدء التجهيز', en: 'Start preparing' },
   preparing: { ar: 'جاهز للتوصيل', en: 'Mark ready' },
   ready: { ar: 'تسليم للمندوب', en: 'Hand to courier' },
   out: { ar: 'تأكيد التوصيل', en: 'Confirm delivered' },
 }
-export const STATUS_TONE: Record<StatusId, string> = {
+export const STATUS_TONE: Record<SubStatus, string> = {
+  rejected: 'bg-ink/10 text-ink/60', cancelled: 'bg-ink/10 text-ink/60',
   placed: 'bg-blush-100 text-blush-700', accepted: 'bg-gold/20 text-cocoa', preparing: 'bg-gold/30 text-cocoa',
   ready: 'bg-green/10 text-green', out: 'bg-green/15 text-green', delivered: 'bg-green text-cream-50',
 }
 
 /** Deterministic synthetic history so charts look alive (labelled as demo). */
 export function syntheticSeries(seed: number, days: number, base: number) {
+  if (apiMode) return Array.from({ length: days }, () => 0) // live data only
   return Array.from({ length: days }).map((_, i) => Math.round(base * (0.75 + 0.35 * Math.sin((i + seed) * 0.9) + 0.25 * Math.cos((i * seed) % 7) + i * 0.012)))
 }
 
 export default function MerchantDash() {
+  const user = useStore((s) => s.user)
+  const { tx } = useI18n()
+  // With the live API only merchants (their own store) and admins (any store) can open the hub.
+  if (apiMode && user?.role !== 'merchant' && user?.role !== 'admin')
+    return <Login title={user ? tx('هذا الحساب ليس حساب تاجر — سجّل الدخول برقم المتجر', 'This account is not a merchant — sign in with the store’s number') : tx('دخول التجار', 'Merchant sign-in')} />
+  return <Hub />
+}
+
+function Hub() {
   const { tx, l, money, date, num } = useI18n()
-  const { merchantSession, setMerchantSession, orders, advance, overrides, setOverride, showToast } = useStore()
-  const m = merchantById(merchantSession)
+  const { merchantSession, setMerchantSession, orders, advance, overrides, setOverride, showToast, user } = useStore()
+  const fixedStore = apiMode && user?.role === 'merchant' ? user.merchantId ?? undefined : undefined
+  const m = merchantById(fixedStore ?? merchantSession) ?? MERCHANTS[0]
   const [tab, setTab] = useState<'overview' | 'orders' | 'products' | 'analytics'>('overview')
   const [filter, setFilter] = useState<'active' | 'all' | 'delivered'>('active')
-  const products = PRODUCTS.filter((p) => p.merchant === m.id)
+  // API mode: include the store's switched-off products so they can be re-activated.
+  const products = (apiMode ? CATALOG.filter((p) => !p.hidden) : PRODUCTS).filter((p) => p.merchant === m.id)
   const myOrders = orders.filter((o) => o.sub[m.id])
   const lines = (o: (typeof orders)[0]) => o.lines.filter((ln) => ln.merchant === m.id)
   const orderRev = (o: (typeof orders)[0]) => lines(o).reduce((a, ln) => a + ln.unit * ln.qty, 0)
-  const realRev = myOrders.reduce((a, o) => a + orderRev(o), 0)
+  // Revenue ignores parts the store rejected or that were cancelled.
+  const revOrders = myOrders.filter((o) => !isClosed(o.sub[m.id].status))
+  const realRev = revOrders.reduce((a, o) => a + orderRev(o), 0)
   const series = useMemo(() => {
     const s = syntheticSeries(m.hue + m.id.length, 14, 1400 + m.reviews)
     const days = Array.from({ length: 14 }).map((_, i) => { const d = new Date(); d.setDate(d.getDate() - 13 + i); return d })
-    myOrders.forEach((o) => { const idx = 13 - Math.floor((Date.now() - o.createdAt) / 86400e3); if (idx >= 0 && idx < 14) s[idx] += orderRev(o) })
+    revOrders.forEach((o) => { const idx = 13 - Math.floor((Date.now() - o.createdAt) / 86400e3); if (idx >= 0 && idx < 14) s[idx] += orderRev(o) })
     return days.map((d, i) => ({ x: date(d, { day: 'numeric', month: 'short' }), y: s[i] }))
   }, [m.id, orders.length, date])
   const rev14 = series.reduce((a, d) => a + d.y, 0)
   const commission = Math.round(rev14 * m.commission)
-  const pending = myOrders.filter((o) => o.sub[m.id].status !== 'delivered')
+  const done = (st: string) => st === 'delivered' || st === 'rejected' || st === 'cancelled'
+  const pending = myOrders.filter((o) => !done(o.sub[m.id].status))
   const lowStock = products.filter((p) => stockOf(p, overrides) <= 5)
-  const shown = myOrders.filter((o) => filter === 'all' || (filter === 'active' ? o.sub[m.id].status !== 'delivered' : o.sub[m.id].status === 'delivered'))
+  const shown = myOrders.filter((o) => filter === 'all' || (filter === 'active' ? !done(o.sub[m.id].status) : done(o.sub[m.id].status)))
 
   const act = (oid: string) => {
     advance(oid, m.id)
@@ -75,7 +93,9 @@ export default function MerchantDash() {
         </div>
         <div className="flex items-center gap-2">
           <label htmlFor="msel" className="text-sm text-ink/55">{tx('الدخول كـ', 'Signed in as')}</label>
-          <select id="msel" value={m.id} onChange={(e) => setMerchantSession(e.target.value)} className="h-10 rounded-full border border-green/15 bg-white px-4 text-sm text-green">{MERCHANTS.map((x) => <option key={x.id} value={x.id}>{l(x.name)}</option>)}</select>
+          {fixedStore
+            ? <span className="h-10 rounded-full border border-green/15 bg-white px-4 text-sm leading-10 text-green">{l(m.name)}</span>
+            : <select id="msel" value={m.id} onChange={(e) => setMerchantSession(e.target.value)} className="h-10 rounded-full border border-green/15 bg-white px-4 text-sm text-green">{[...MERCHANTS, ...(apiMode ? MERCHANT_ARCHIVE : [])].map((x) => <option key={x.id} value={x.id}>{l(x.name)}</option>)}</select>}
           <Link to={`/merchant/${m.id}`} className="hidden h-10 items-center gap-1 rounded-full px-3 text-sm text-cocoa hover:bg-cocoa/5 sm:flex"><I.eye size={16} />{tx('صفحة المتجر', 'Storefront')}</Link>
         </div>
       </div>
@@ -97,14 +117,14 @@ export default function MerchantDash() {
               {tab === 'overview' && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-                    <Kpi label={tx('المبيعات (١٤ يوم)', 'Sales (14 days)')} value={money(rev14)} delta={12} hint={tx('مقابل الفترة السابقة', 'vs prior period')} />
+                    <Kpi label={tx('المبيعات (١٤ يوم)', 'Sales (14 days)')} value={money(rev14)} {...(apiMode ? { hint: tx(`${revOrders.length} طلب`, `${revOrders.length} orders`) } : { delta: 12, hint: tx('مقابل الفترة السابقة', 'vs prior period') })} />
                     <Kpi label={tx('طلبات نشطة', 'Active orders')} value={num(pending.length)} hint={tx('تحتاج إجراء', 'need action')} />
                     <Kpi label={tx(`عمولة لمّة (${m.commission * 100}٪)`, `Lamma commission (${m.commission * 100}%)`)} value={money(commission)} />
                     <Kpi label={tx('صافي المستحق', 'Net payout')} value={money(rev14 - commission)} hint={tx('يُحوّل أسبوعياً', 'paid weekly')} />
                   </div>
                   <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
                     <div className="rounded-[28px] bg-white p-5 shadow-soft xl:col-span-2">
-                      <div className="mb-2 flex items-center justify-between"><h2 className="font-display text-lg font-semibold text-green">{tx('المبيعات اليومية', 'Daily sales')}</h2><span className="text-[11px] text-ink/45">{tx('بيانات تجريبية + طلبات العرض', 'Demo history + live demo orders')}</span></div>
+                      <div className="mb-2 flex items-center justify-between"><h2 className="font-display text-lg font-semibold text-green">{tx('المبيعات اليومية', 'Daily sales')}</h2><span className="text-[11px] text-ink/45">{apiMode ? tx('من طلباتك', 'From your orders') : tx('بيانات تجريبية + طلبات العرض', 'Demo history + live demo orders')}</span></div>
                       <AreaChart data={series} format={money} label={tx('المبيعات اليومية لآخر ١٤ يوم', 'Daily sales, last 14 days')} />
                     </div>
                     <div className="rounded-[28px] bg-white p-5 shadow-soft">
@@ -162,7 +182,7 @@ export default function MerchantDash() {
                             </ul>
                             <div className="mt-3 rounded-2xl border border-dashed border-green/15 p-3 text-xs text-ink/60"><I.gift size={14} className="me-1 inline text-gold-700" />{tx('كرت:', 'Card:')} “{o.card.message}” — {o.card.from}</div>
                             {/* status stepper */}
-                            <div className="mt-4 flex items-center gap-1" aria-hidden>{STATUS_FLOW.map((x, i) => <span key={x} className={cx('h-1.5 flex-1 rounded-full', i <= STATUS_FLOW.indexOf(s) ? 'bg-green' : 'bg-green/10')} />)}</div>
+                            <div className="mt-4 flex items-center gap-1" aria-hidden>{STATUS_FLOW.map((x, i) => <span key={x} className={cx('h-1.5 flex-1 rounded-full', i <= STATUS_FLOW.indexOf(s as StatusId) ? 'bg-green' : 'bg-green/10')} />)}</div>
                             <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                               <span className="text-sm text-ink/55">{tx('صافي لك', 'Your net')} <span className="tabular font-semibold text-green">{money(orderRev(o) * (1 - m.commission))}</span></span>
                               <div className="flex gap-2">
@@ -212,13 +232,15 @@ export default function MerchantDash() {
                 <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                   <div className="rounded-[28px] bg-white p-5 shadow-soft">
                     <h2 className="mb-1 font-display text-lg font-semibold text-green">{tx('الأكثر مبيعاً', 'Top products')}</h2>
-                    <p className="mb-5 text-xs text-ink/45">{tx('إيراد تقديري ٣٠ يوم · تجريبي', 'Estimated 30-day revenue · demo')}</p>
-                    <BarList format={money} data={products.map((p) => ({ label: l(p.name), value: Math.round(basePrice(p, overrides) * (p.reviews / 12)) })).sort((a, b) => b.value - a.value).slice(0, 6)} />
+                    <p className="mb-5 text-xs text-ink/45">{apiMode ? tx('من طلباتك المدفوعة', 'From your paid orders') : tx('إيراد تقديري ٣٠ يوم · تجريبي', 'Estimated 30-day revenue · demo')}</p>
+                    <BarList format={money} data={(apiMode
+                      ? products.map((p) => ({ label: l(p.name), value: revOrders.reduce((a, o) => a + lines(o).filter((ln) => ln.productId === p.id).reduce((b, ln) => b + ln.unit * ln.qty, 0), 0) })).filter((x) => x.value > 0)
+                      : products.map((p) => ({ label: l(p.name), value: Math.round(basePrice(p, overrides) * (p.reviews / 12)) }))).sort((a, b) => b.value - a.value).slice(0, 6)} />
                   </div>
                   <div className="rounded-[28px] bg-white p-5 shadow-soft">
                     <h2 className="mb-1 font-display text-lg font-semibold text-green">{tx('الطلبات حسب المدينة', 'Orders by city')}</h2>
-                    <p className="mb-5 text-xs text-ink/45">{tx('آخر ٣٠ يوم · تجريبي', 'Last 30 days · demo')}</p>
-                    <BarList format={(n) => num(n)} data={m.cities.map((c, i) => ({ label: l(CITIES.find((x) => x.id === c)!.name), value: Math.round((m.reviews / 9) / (i + 1.2)) + myOrders.filter((o) => o.recipient.city === c).length }))} />
+                    <p className="mb-5 text-xs text-ink/45">{apiMode ? tx('من طلباتك', 'From your orders') : tx('آخر ٣٠ يوم · تجريبي', 'Last 30 days · demo')}</p>
+                    <BarList format={(n) => num(n)} data={m.cities.map((c, i) => ({ label: l(CITIES.find((x) => x.id === c)!.name), value: (apiMode ? 0 : Math.round((m.reviews / 9) / (i + 1.2))) + revOrders.filter((o) => o.recipient.city === c).length }))} />
                   </div>
                   <div className="rounded-[28px] bg-white p-5 shadow-soft xl:col-span-2">
                     <h2 className="mb-4 font-display text-lg font-semibold text-green">{tx('تفصيل المستحقات (١٤ يوم)', 'Payout breakdown (14 days)')}</h2>
@@ -227,7 +249,7 @@ export default function MerchantDash() {
                         <div key={i} className={cx('rounded-2xl p-4', i === 2 ? 'bg-green text-cream-50' : 'bg-cream-50')}><div className="text-xs opacity-70">{a as string}</div><div className="tabular mt-1 font-display text-xl font-semibold">{(b as number) < 0 ? '−' : ''}{money(Math.abs(b as number))}</div></div>
                       ))}
                     </div>
-                    <p className="mt-3 text-xs text-ink/45">{tx(`منها ${money(realRev)} من طلبات أُنشئت في هذا العرض.`, `${money(realRev)} of this comes from orders placed in this demo.`)}</p>
+                    {!apiMode && <p className="mt-3 text-xs text-ink/45">{tx(`منها ${money(realRev)} من طلبات أُنشئت في هذا العرض.`, `${money(realRev)} of this comes from orders placed in this demo.`)}</p>}
                   </div>
                 </div>
               )}

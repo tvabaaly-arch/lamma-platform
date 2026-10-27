@@ -9,8 +9,8 @@ import {
   PRODUCTS, CITIES, OCCASIONS, RECIPIENTS, merchantById, inCategory,
   type CategoryId, type CityId, type OccasionId, type RecipientId, type Product, type L, type AgeGroup, type Interest, type Relationship,
 } from '../data/catalog'
-import { isAvailable, unitPrice, defaultVariant } from './store'
-import type { Brief } from './store'
+import { isAvailable, unitPrice, defaultVariant } from './model'
+import type { Brief } from './model'
 
 type Ov = Parameters<typeof isAvailable>[1]
 

@@ -1,7 +1,9 @@
 import { motion } from 'framer-motion'
 import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { CATEGORIES, CITIES, MERCHANTS, PRODUCTS, productById } from '../data/catalog'
+import { CATEGORIES, CITIES, MERCHANTS, MERCHANT_ARCHIVE, PRODUCTS, productById } from '../data/catalog'
+import { apiMode } from '../lib/api'
+import { Login } from './Account'
 import { useI18n } from '../lib/i18n'
 import { useStore, orderStatus } from '../lib/store'
 import { MerchantMonogram } from '../components/Layout'
@@ -12,8 +14,18 @@ import { STATUS_LABEL } from './Order'
 import { STATUS_TONE, syntheticSeries } from './MerchantDash'
 
 export default function AdminDash() {
+  const user = useStore((s) => s.user)
+  const { tx } = useI18n()
+  if (apiMode && user?.role !== 'admin')
+    return <Login title={user ? tx('هذا الحساب ليس حساب إدارة', 'This account is not an admin') : tx('دخول الإدارة', 'Admin sign-in')} />
+  return <Console />
+}
+
+function Console() {
   const { tx, l, money, date, num } = useI18n()
-  const { orders, merchantStatus, setMerchantStatus, studio, showToast } = useStore()
+  const { orders: allOrders, merchantStatus, setMerchantStatus, studio, showToast } = useStore()
+  // Money figures count paid orders only (the live API also returns unpaid / expired ones).
+  const orders = apiMode ? allOrders.filter((o) => o.paymentStatus === 'paid') : allOrders
   const demoGmv = orders.reduce((a, o) => a + o.totals.total, 0)
   const series = useMemo(() => {
     const s = syntheticSeries(3, 30, 38000)
@@ -21,9 +33,17 @@ export default function AdminDash() {
     return s.map((y, i) => { const d = new Date(); d.setDate(d.getDate() - 29 + i); return { x: date(d, { day: 'numeric', month: 'short' }), y } })
   }, [orders.length, date])
   const gmv = series.reduce((a, d) => a + d.y, 0)
-  const takeRate = 0.145
-  const catData = CATEGORIES.map((c) => ({ label: l(c.name), value: Math.round(PRODUCTS.filter((p) => p.cat === c.id).reduce((a, p) => a + p.price * p.reviews, 0) / 40) })).sort((a, b) => b.value - a.value)
-  const cityData = CITIES.map((c, i) => ({ label: l(c.name), value: Math.round(gmv * [0.34, 0.24, 0.1, 0.09, 0.08, 0.06, 0.05, 0.04][i]) }))
+  // Live API: every figure comes from real orders. Offline demo: illustrative figures.
+  type SubMoney = { subtotal?: number; commission?: number }
+  const subs = orders.flatMap((o) => Object.values(o.sub) as SubMoney[])
+  const grossSubs = subs.reduce((a, x) => a + (x.subtotal ?? 0), 0)
+  const takeRate = apiMode ? (grossSubs ? subs.reduce((a, x) => a + (x.commission ?? 0), 0) / grossSubs : 0) : 0.145
+  const catData = (apiMode
+    ? CATEGORIES.map((c) => ({ label: l(c.name), value: orders.reduce((a, o) => a + o.lines.filter((ln) => productById(ln.productId)?.cat === c.id).reduce((b, ln) => b + ln.unit * ln.qty, 0), 0) })).filter((x) => x.value > 0)
+    : CATEGORIES.map((c) => ({ label: l(c.name), value: Math.round(PRODUCTS.filter((p) => p.cat === c.id).reduce((a, p) => a + p.price * p.reviews, 0) / 40) }))).sort((a, b) => b.value - a.value)
+  const cityData = apiMode
+    ? CITIES.map((c) => ({ label: l(c.name), value: orders.filter((o) => o.recipient.city === c.id).reduce((a, o) => a + o.totals.total, 0) })).filter((x) => x.value > 0).sort((a, b) => b.value - a.value)
+    : CITIES.map((c, i) => ({ label: l(c.name), value: Math.round(gmv * [0.34, 0.24, 0.1, 0.09, 0.08, 0.06, 0.05, 0.04][i]) }))
 
   return (
     <div className="mx-auto max-w-[1440px] px-4 pb-24 pt-6 md:px-8">
@@ -31,16 +51,22 @@ export default function AdminDash() {
         <div>
           <div className="flex items-center gap-2 text-[13px] text-ink/50">{tx('لوحة الإدارة', 'Admin console')}<DemoTag /></div>
           <h1 className="font-display text-3xl font-semibold text-green md:text-4xl">{tx('نبض لمّة', 'Lamma pulse')}</h1>
-          <p className="text-sm text-ink/55">{tx('آخر ٣٠ يوم — أرقام تجريبية مع طلبات هذا العرض', 'Last 30 days — demo figures plus orders placed in this demo')}</p>
+          <p className="text-sm text-ink/55">{apiMode ? tx('آخر ٣٠ يوم — من الطلبات المدفوعة على المنصة', 'Last 30 days — from paid orders on the platform') : tx('آخر ٣٠ يوم — أرقام تجريبية مع طلبات هذا العرض', 'Last 30 days — demo figures plus orders placed in this demo')}</p>
         </div>
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Kpi label={tx('إجمالي قيمة الطلبات', 'GMV')} value={money(gmv)} delta={18} />
+        <Kpi label={tx('إجمالي قيمة الطلبات', 'GMV')} value={money(gmv)} {...(apiMode ? {} : { delta: 18 })} />
         <Kpi label={tx('إيراد المنصة', 'Platform revenue')} value={money(gmv * takeRate)} hint={tx(`نسبة ${(takeRate * 100).toFixed(1)}٪`, `${(takeRate * 100).toFixed(1)}% take rate`)} />
-        <Kpi label={tx('الطلبات', 'Orders')} value={num(Math.round(gmv / 430))} delta={9} />
-        <Kpi label={tx('لمّات الاستوديو', 'Studio bundles')} value={num(studio.bundlesGenerated)} hint={tx('٣١٪ تحويل (تجريبي)', '31% conversion (demo)')} />
-        <Kpi label={tx('طلبات هذا العرض', 'This demo’s orders')} value={num(orders.length)} hint={money(demoGmv)} />
+        {apiMode ? <>
+          <Kpi label={tx('طلبات مدفوعة', 'Paid orders')} value={num(orders.length)} hint={tx(`متوسط ${money(orders.length ? demoGmv / orders.length : 0)}`, `avg ${money(orders.length ? demoGmv / orders.length : 0)}`)} />
+          <Kpi label={tx('المتاجر النشطة', 'Live stores')} value={num(MERCHANTS.length)} hint={tx(`${MERCHANT_ARCHIVE.filter((x) => merchantStatus[x.id] === 'pending').length} بانتظار الاعتماد`, `${MERCHANT_ARCHIVE.filter((x) => merchantStatus[x.id] === 'pending').length} awaiting approval`)} />
+          <Kpi label={tx('كل الطلبات', 'All orders')} value={num(allOrders.length)} hint={tx(`${allOrders.length - orders.length} غير مدفوعة أو ملغاة`, `${allOrders.length - orders.length} unpaid or cancelled`)} />
+        </> : <>
+          <Kpi label={tx('الطلبات', 'Orders')} value={num(Math.round(gmv / 430))} delta={9} />
+          <Kpi label={tx('لمّات الاستوديو', 'Studio bundles')} value={num(studio.bundlesGenerated)} hint={tx('٣١٪ تحويل (تجريبي)', '31% conversion (demo)')} />
+          <Kpi label={tx('طلبات هذا العرض', 'This demo’s orders')} value={num(orders.length)} hint={money(demoGmv)} />
+        </>}
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-3">
@@ -62,7 +88,7 @@ export default function AdminDash() {
             <table className="w-full min-w-[620px] text-sm">
               <thead className="text-xs text-ink/50"><tr><th className="pb-3 text-start font-medium">{tx('المتجر', 'Merchant')}</th><th className="pb-3 text-start font-medium">{tx('التقييم', 'Rating')}</th><th className="pb-3 text-start font-medium">{tx('المدن', 'Cities')}</th><th className="pb-3 text-start font-medium">{tx('العمولة', 'Commission')}</th><th className="pb-3 text-start font-medium">{tx('الحالة', 'Status')}</th><th /></tr></thead>
               <tbody>
-                {MERCHANTS.map((m) => {
+                {[...MERCHANTS, ...(apiMode ? MERCHANT_ARCHIVE : [])].map((m) => {
                   const st = merchantStatus[m.id] ?? 'active'
                   return (
                     <tr key={m.id} className="border-t border-green/5">
@@ -90,7 +116,7 @@ export default function AdminDash() {
         </div>
         <div className="rounded-[28px] bg-white p-5 shadow-soft">
           <h2 className="mb-1 font-display text-lg font-semibold text-green">{tx('حسب القسم', 'By category')}</h2>
-          <p className="mb-4 text-xs text-ink/45">{tx('قيمة تقديرية · تجريبي', 'Estimated value · demo')}</p>
+          <p className="mb-4 text-xs text-ink/45">{apiMode ? tx('من الطلبات المدفوعة', 'From paid orders') : tx('قيمة تقديرية · تجريبي', 'Estimated value · demo')}</p>
           <BarList format={money} data={catData} />
         </div>
       </div>
@@ -101,7 +127,7 @@ export default function AdminDash() {
           <table className="w-full min-w-[640px] text-sm">
             <thead className="text-xs text-ink/50"><tr><th className="pb-3 text-start font-medium">{tx('الطلب', 'Order')}</th><th className="pb-3 text-start font-medium">{tx('المدينة', 'City')}</th><th className="pb-3 text-start font-medium">{tx('المتاجر', 'Merchants')}</th><th className="pb-3 text-start font-medium">{tx('القيمة', 'Value')}</th><th className="pb-3 text-start font-medium">{tx('الحالة', 'Status')}</th></tr></thead>
             <tbody>
-              {orders.slice(0, 10).map((o) => {
+              {allOrders.slice(0, 10).map((o) => {
                 const s = orderStatus(o)
                 return (
                   <motion.tr layout key={o.id} className="border-t border-green/5">
